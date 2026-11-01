@@ -1,38 +1,40 @@
 import { useState } from 'react';
-import toast, { Toaster } from 'react-hot-toast';
-import SearchBar from '../../components/SearchBar/SearchBar';
-import { fetchMovies } from '../../services/movieService';
+import { Toaster } from 'react-hot-toast';
+import css from './App.module.css';
 import type { Movie } from '../../types/movie';
+import { fetchMovies } from '../../services/movieService';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import SearchBar from '../../components/SearchBar/SearchBar';
 import MovieGrid from '../../components/MovieGrid/MovieGrid';
-import './App.module.css';
 import Loader from '../../components/Loader/Loader';
 import ErrorMessage from '../../components/ErrorMessage/ErrorMessage';
 import MovieModal from '../../components/MovieModal/MovieModal';
 
-export default function App() {
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isError, setIsError] = useState(false);
+import ReactPaginateModule from 'react-paginate';
+import type { ReactPaginateProps } from 'react-paginate';
+import type { ComponentType } from 'react';
+type ModuleWithDefault<T> = { default: T };
+const ReactPaginate = (
+  ReactPaginateModule as unknown as ModuleWithDefault<
+    ComponentType<ReactPaginateProps>
+  >
+).default;
 
-  const handleSearchSubmit = async (query: string) => {
-    try {
-      setMovies([]);
-      setIsError(false);
-      setIsLoading(true);
-      const response = await fetchMovies(query, 1);
-      if (response.results.length === 0) {
-        toast.error('No movies found for your request.');
-        return;
-      }
-      setMovies(response.results);
-    } catch (error) {
-      setIsError(true);
-      toast.error('Something went wrong while fetching movies.');
-      console.error('Error fetching movies:', error);
-    } finally {
-      setIsLoading(false);
-    }
+export default function App() {
+  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['movies', searchQuery, page],
+    queryFn: () => fetchMovies(searchQuery, page),
+    enabled: searchQuery !== '',
+    placeholderData: keepPreviousData,
+  });
+
+  const handleSearchSubmit = (query: string) => {
+    setSearchQuery(query);
+    setPage(1);
   };
 
   const handleMovieSelect = (movie: Movie) => {
@@ -43,17 +45,52 @@ export default function App() {
     setSelectedMovie(null);
   };
 
+  const movies = data?.results || [];
+  const totalPages = data?.total_pages || 0;
+
   return (
     <div>
       <SearchBar onSubmit={handleSearchSubmit} />
+
       {isLoading && <Loader />}
       {isError && <ErrorMessage />}
+
+      {totalPages > 1 && (
+        <ReactPaginate
+          pageCount={totalPages}
+          pageRangeDisplayed={5}
+          marginPagesDisplayed={1}
+          onPageChange={({ selected }) => setPage(selected + 1)}
+          forcePage={page - 1}
+          containerClassName={css.pagination}
+          activeClassName={css.active}
+          nextLabel="→"
+          previousLabel="←"
+        />
+      )}
+
       {!isLoading && !isError && movies.length > 0 && (
         <MovieGrid movies={movies} onSelect={handleMovieSelect} />
       )}
+
+      {totalPages > 1 && (
+        <ReactPaginate
+          pageCount={totalPages}
+          pageRangeDisplayed={5}
+          marginPagesDisplayed={1}
+          onPageChange={({ selected }) => setPage(selected + 1)}
+          forcePage={page - 1}
+          containerClassName={css.pagination}
+          activeClassName={css.active}
+          nextLabel="→"
+          previousLabel="←"
+        />
+      )}
+
       {selectedMovie && (
         <MovieModal movie={selectedMovie} onClose={closeMovieModal} />
       )}
+
       <Toaster position="top-right" reverseOrder={false} />
     </div>
   );
