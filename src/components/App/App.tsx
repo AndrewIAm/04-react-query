@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Toaster } from 'react-hot-toast';
+import { useState, useEffect } from 'react';
+import toast, { Toaster } from 'react-hot-toast';
 import css from './App.module.css';
 import type { Movie } from '../../types/movie';
 import { fetchMovies } from '../../services/movieService';
@@ -25,12 +25,18 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isSuccess, isError } = useQuery({
     queryKey: ['movies', searchQuery, page],
     queryFn: () => fetchMovies(searchQuery, page),
     enabled: searchQuery !== '',
     placeholderData: keepPreviousData,
   });
+
+  useEffect(() => {
+    if (isSuccess && data?.results.length === 0) {
+      toast.error('No movies found for your request.');
+    }
+  }, [isSuccess, data]);
 
   const handleSearchSubmit = (query: string) => {
     setSearchQuery(query);
@@ -54,20 +60,6 @@ export default function App() {
 
       {isLoading && <Loader />}
       {isError && <ErrorMessage />}
-
-      {totalPages > 1 && (
-        <ReactPaginate
-          pageCount={totalPages}
-          pageRangeDisplayed={5}
-          marginPagesDisplayed={1}
-          onPageChange={({ selected }) => setPage(selected + 1)}
-          forcePage={page - 1}
-          containerClassName={css.pagination}
-          activeClassName={css.active}
-          nextLabel="→"
-          previousLabel="←"
-        />
-      )}
 
       {!isLoading && !isError && movies.length > 0 && (
         <MovieGrid movies={movies} onSelect={handleMovieSelect} />
